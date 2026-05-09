@@ -1,0 +1,712 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>納斯卡線 運筆大挑戰</title>
+  
+  <!-- 引入 Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  
+  <!-- 定義 React 與 Lucide Icons 的 ES 模組來源 -->
+  <script type="importmap">
+    {
+      "imports": {
+        "react": "https://esm.sh/react@18.2.0",
+        "react-dom/client": "https://esm.sh/react-dom@18.2.0/client",
+        "lucide-react": "https://esm.sh/lucide-react@0.292.0"
+      }
+    }
+  </script>
+  
+  <!-- 引入 Babel 讓瀏覽器可以直接解析 JSX -->
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+  <style>
+    /* 防止觸控裝置上的預設行為 (如雙擊放大或下拉更新) */
+    body {
+      overscroll-behavior: none;
+      -webkit-touch-callout: none;
+      user-select: none;
+    }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+
+  <!-- React 應用程式邏輯 -->
+  <script type="text/babel" data-type="module">
+    import React, { useState, useEffect, useRef } from 'react';
+    import { createRoot } from 'react-dom/client';
+    import { 
+      Pencil, Zap, RefreshCw, Trophy, AlertTriangle, 
+      Info, Triangle, Bug, Bird, Play, Hand,
+      Dog, User, Fish, Trees, Aperture,
+      Cat, Bot, PawPrint
+    } from 'lucide-react';
+
+    // === 納斯卡線圖案資料庫 ===
+    const PATTERNS = [
+      {
+        id: 'hummingbird',
+        category: 'biomorph',
+        name: '蜂鳥 (Hummingbird)',
+        icon: <Bird size={20} />,
+        description: '蜂鳥是納斯卡沙漠中最著名的生物圖案之一，長達約93公尺。科學家猜測它那細長的喙，可能指向古代夏至的日出方向，具有天文曆法的意義。',
+        getShape: (w, h) => {
+          const path = new Path2D();
+          const start = { x: w * 0.1, y: h * 0.2 };
+          const end = { x: w * 0.15, y: h * 0.28 };
+          
+          path.moveTo(start.x, start.y);
+          path.lineTo(w * 0.45, h * 0.4); 
+          path.lineTo(w * 0.25, h * 0.3); 
+          path.lineTo(w * 0.35, h * 0.15); 
+          path.lineTo(w * 0.5, h * 0.45); 
+          path.lineTo(w * 0.4, h * 0.85); 
+          path.lineTo(w * 0.65, h * 0.85); 
+          path.lineTo(w * 0.55, h * 0.45); 
+          path.lineTo(w * 0.7, h * 0.15); 
+          path.lineTo(w * 0.8, h * 0.3); 
+          path.lineTo(w * 0.5, h * 0.4); 
+          path.lineTo(end.x, end.y); 
+          return { path, start, end };
+        }
+      },
+      {
+        id: 'spider',
+        category: 'biomorph',
+        name: '蜘蛛 (Spider)',
+        icon: <Bug size={20} />,
+        description: '這隻蜘蛛圖案長達約45公尺。納斯卡線的一個神奇特點在於，許多動物圖形都是由「一條連續不斷的線條」所構成的，你可以試著一筆畫完它！',
+        getShape: (w, h) => {
+          const path = new Path2D();
+          const start = { x: w * 0.5, y: h * 0.1 };
+          const end = { x: w * 0.5, y: h * 0.9 };
+          
+          path.moveTo(start.x, start.y);
+          path.lineTo(w * 0.5, h * 0.3); 
+          path.lineTo(w * 0.8, h * 0.2); 
+          path.lineTo(w * 0.9, h * 0.4); 
+          path.lineTo(w * 0.55, h * 0.45);
+          path.lineTo(w * 0.85, h * 0.6); 
+          path.lineTo(w * 0.75, h * 0.8); 
+          path.lineTo(w * 0.55, h * 0.55);
+          path.lineTo(w * 0.2, h * 0.5); 
+          path.lineTo(w * 0.15, h * 0.7); 
+          path.lineTo(w * 0.45, h * 0.45);
+          path.lineTo(w * 0.2, h * 0.2); 
+          path.lineTo(w * 0.1, h * 0.4); 
+          path.lineTo(w * 0.45, h * 0.35);
+          path.lineTo(w * 0.5, h * 0.6);
+          path.lineTo(end.x, end.y); 
+          return { path, start, end };
+        }
+      },
+      {
+        id: 'spiral',
+        category: 'geometric',
+        name: '幾何折線 (Geometric)',
+        icon: <Triangle size={20} />,
+        description: '幾何圖案與直線佔了納斯卡線的絕大多數。有些直線長達數公里，精準度極高。學者推測這些幾何線條可能代表著古代水源引導系統，或是宗教儀式的步道。',
+        getShape: (w, h) => {
+          const path = new Path2D();
+          const start = { x: w * 0.1, y: h * 0.9 };
+          const end = { x: w * 0.5, y: h * 0.5 };
+          
+          path.moveTo(start.x, start.y);
+          path.lineTo(w * 0.1, h * 0.1);
+          path.lineTo(w * 0.9, h * 0.1);
+          path.lineTo(w * 0.9, h * 0.8);
+          path.lineTo(w * 0.3, h * 0.8);
+          path.lineTo(w * 0.3, h * 0.3);
+          path.lineTo(w * 0.7, h * 0.3);
+          path.lineTo(w * 0.7, h * 0.6);
+          path.lineTo(w * 0.5, h * 0.6);
+          path.lineTo(end.x, end.y);
+          return { path, start, end };
+        }
+      },
+      {
+        id: 'monkey',
+        category: 'biomorph',
+        name: '猴子 (Monkey)',
+        icon: <Aperture size={20} />,
+        description: '這隻猴子長達約110公尺，最著名的特徵是牠那捲曲成巨大螺旋狀的尾巴。學者認為猴子在當時可能與祈求水資源有關。',
+        getShape: (w, h) => {
+          const path = new Path2D();
+          const start = { x: w * 0.8, y: h * 0.8 };
+          const end = { x: w * 0.25, y: h * 0.4 };
+          
+          path.moveTo(start.x, start.y);
+          path.lineTo(w * 0.7, h * 0.6); 
+          path.lineTo(w * 0.75, h * 0.45); 
+          path.lineTo(w * 0.6, h * 0.45); 
+          path.lineTo(w * 0.5, h * 0.6); 
+          path.lineTo(w * 0.3, h * 0.8);
+          path.lineTo(w * 0.1, h * 0.6);
+          path.lineTo(w * 0.2, h * 0.3);
+          path.lineTo(w * 0.4, h * 0.4);
+          path.lineTo(w * 0.35, h * 0.6);
+          path.lineTo(w * 0.2, h * 0.5);
+          path.lineTo(end.x, end.y);
+          return { path, start, end };
+        }
+      },
+      {
+        id: 'astronaut',
+        category: 'humanoid',
+        name: '太空人 (Astronaut)',
+        icon: <User size={20} />,
+        description: '這個被稱為「太空人」的圖形長約32公尺，與其他平原圖形不同，它刻畫在山坡上，看起來像是一個正向人類揮手的外星人。',
+        getShape: (w, h) => {
+          const path = new Path2D();
+          const start = { x: w * 0.3, y: h * 0.2 };
+          const end = { x: w * 0.4, y: h * 0.4 };
+          
+          path.moveTo(start.x, start.y);
+          path.lineTo(w * 0.4, h * 0.4); 
+          path.lineTo(w * 0.35, h * 0.3); 
+          path.lineTo(w * 0.5, h * 0.15); 
+          path.lineTo(w * 0.65, h * 0.3); 
+          path.lineTo(w * 0.6, h * 0.4); 
+          path.lineTo(w * 0.7, h * 0.6); 
+          path.lineTo(w * 0.65, h * 0.6); 
+          path.lineTo(w * 0.6, h * 0.7); 
+          path.lineTo(w * 0.6, h * 0.9); 
+          path.lineTo(w * 0.55, h * 0.9);
+          path.lineTo(w * 0.55, h * 0.7); 
+          path.lineTo(w * 0.45, h * 0.7); 
+          path.lineTo(w * 0.45, h * 0.9); 
+          path.lineTo(w * 0.4, h * 0.9);
+          path.lineTo(w * 0.4, h * 0.7); 
+          path.lineTo(end.x, end.y); 
+          return { path, start, end };
+        }
+      },
+      {
+        id: 'whale',
+        category: 'biomorph',
+        name: '鯨魚 (Whale)',
+        icon: <Fish size={20} />,
+        description: '長約63公尺的鯨魚圖案。納斯卡文明雖然身處沙漠，但距離海洋並不遠，海洋生物圖案反映了他們與海洋的深厚聯繫。',
+        getShape: (w, h) => {
+          const path = new Path2D();
+          const start = { x: w * 0.8, y: h * 0.3 };
+          const end = { x: w * 0.75, y: h * 0.5 };
+          
+          path.moveTo(start.x, start.y);
+          path.lineTo(w * 0.6, h * 0.5); 
+          path.lineTo(w * 0.5, h * 0.4); 
+          path.lineTo(w * 0.3, h * 0.4); 
+          path.lineTo(w * 0.3, h * 0.2); 
+          path.lineTo(w * 0.25, h * 0.4); 
+          path.lineTo(w * 0.1, h * 0.5); 
+          path.lineTo(w * 0.1, h * 0.6); 
+          path.lineTo(w * 0.25, h * 0.6); 
+          path.lineTo(w * 0.35, h * 0.8); 
+          path.lineTo(w * 0.4, h * 0.8);
+          path.lineTo(w * 0.4, h * 0.65); 
+          path.lineTo(w * 0.6, h * 0.6); 
+          path.lineTo(w * 0.8, h * 0.7); 
+          path.lineTo(end.x, end.y); 
+          return { path, start, end };
+        }
+      },
+      {
+        id: 'tree',
+        category: 'biomorph',
+        name: '樹 (Tree)',
+        icon: <Trees size={20} />,
+        description: '位於納斯卡沙漠觀景塔旁的巨大樹木圖形，長約70公尺。這些圖形展現了古代人民對自然界動植物的敬畏。',
+        getShape: (w, h) => {
+          const path = new Path2D();
+          const start = { x: w * 0.4, y: h * 0.9 };
+          const end = { x: w * 0.5, y: h * 0.8 };
+          
+          path.moveTo(start.x, start.y);
+          path.lineTo(w * 0.45, h * 0.6); 
+          path.lineTo(w * 0.2, h * 0.5); 
+          path.lineTo(w * 0.3, h * 0.4);
+          path.lineTo(w * 0.1, h * 0.3);
+          path.lineTo(w * 0.4, h * 0.35);
+          path.lineTo(w * 0.35, h * 0.1); 
+          path.lineTo(w * 0.5, h * 0.3); 
+          path.lineTo(w * 0.65, h * 0.1); 
+          path.lineTo(w * 0.6, h * 0.35);
+          path.lineTo(w * 0.9, h * 0.3); 
+          path.lineTo(w * 0.7, h * 0.4);
+          path.lineTo(w * 0.8, h * 0.5);
+          path.lineTo(w * 0.55, h * 0.6); 
+          path.lineTo(w * 0.6, h * 0.9); 
+          path.lineTo(end.x, end.y); 
+          return { path, start, end };
+        }
+      },
+      {
+        id: 'dog',
+        category: 'biomorph',
+        name: '狗 / 狐狸 (Dog)',
+        icon: <Dog size={20} />,
+        description: '長約51公尺的犬科動物圖形。納斯卡線的動物圖案大多由一條不間斷的線條構成，是極高超的幾何設計。',
+        getShape: (w, h) => {
+          const path = new Path2D();
+          const start = { x: w * 0.9, y: h * 0.5 };
+          const end = { x: w * 0.8, y: h * 0.6 };
+          
+          path.moveTo(start.x, start.y);
+          path.lineTo(w * 0.7, h * 0.4); 
+          path.lineTo(w * 0.5, h * 0.35); 
+          path.lineTo(w * 0.4, h * 0.2); 
+          path.lineTo(w * 0.35, h * 0.3); 
+          path.lineTo(w * 0.15, h * 0.35); 
+          path.lineTo(w * 0.25, h * 0.45); 
+          path.lineTo(w * 0.3, h * 0.6); 
+          path.lineTo(w * 0.35, h * 0.6);
+          path.lineTo(w * 0.35, h * 0.5); 
+          path.lineTo(w * 0.5, h * 0.55); 
+          path.lineTo(w * 0.6, h * 0.7); 
+          path.lineTo(w * 0.65, h * 0.7);
+          path.lineTo(w * 0.65, h * 0.5);
+          path.lineTo(end.x, end.y); 
+          return { path, start, end };
+        }
+      },
+      {
+        id: 'ai_cat',
+        category: 'biomorph',
+        name: 'AI新發現: 蜷縮貓',
+        icon: <Cat size={20} />,
+        description: '【AI與無人機新發現】這隻姿態生動的蜷縮貓咪屬於較早期的帕拉卡斯文化。與傳統納斯卡線不同，這類新發現的圖形大多較小，且刻畫在陡峭的山坡上，風格非常可愛。',
+        getShape: (w, h) => {
+          const path = new Path2D();
+          const start = { x: w * 0.7, y: h * 0.5 };
+          const end = { x: w * 0.5, y: h * 0.6 };
+          
+          path.moveTo(start.x, start.y);
+          path.lineTo(w * 0.8, h * 0.4); 
+          path.lineTo(w * 0.7, h * 0.2); 
+          path.lineTo(w * 0.4, h * 0.2); 
+          path.lineTo(w * 0.2, h * 0.4); 
+          path.lineTo(w * 0.2, h * 0.6); 
+          path.lineTo(w * 0.35, h * 0.7); 
+          path.lineTo(w * 0.45, h * 0.65);
+          path.lineTo(w * 0.3, h * 0.5); 
+          path.lineTo(w * 0.3, h * 0.3); 
+          path.lineTo(w * 0.4, h * 0.25); 
+          path.lineTo(w * 0.5, h * 0.35); 
+          path.lineTo(w * 0.5, h * 0.45); 
+          path.lineTo(w * 0.6, h * 0.45); 
+          path.lineTo(w * 0.6, h * 0.75); 
+          path.lineTo(w * 0.75, h * 0.7); 
+          path.lineTo(w * 0.65, h * 0.55);
+          path.lineTo(end.x, end.y); 
+          return { path, start, end };
+        }
+      },
+      {
+        id: 'ai_alpaca',
+        category: 'biomorph',
+        name: 'AI新發現: 羊駝',
+        icon: <PawPrint size={20} />,
+        description: '【AI與無人機新發現】羊駝是安地斯山脈最重要的動物。AI 幫助考古學家在肉眼難以辨識的風化地表上，找出了這些古老先民留下的生活印記。',
+        getShape: (w, h) => {
+          const path = new Path2D();
+          const start = { x: w * 0.2, y: h * 0.6 };
+          const end = { x: w * 0.3, y: h * 0.5 };
+          
+          path.moveTo(start.x, start.y);
+          path.lineTo(w * 0.25, h * 0.45); 
+          path.lineTo(w * 0.5, h * 0.4); 
+          path.lineTo(w * 0.6, h * 0.15); 
+          path.lineTo(w * 0.55, h * 0.1); 
+          path.lineTo(w * 0.6, h * 0.05); 
+          path.lineTo(w * 0.65, h * 0.1); 
+          path.lineTo(w * 0.7, h * 0.15); 
+          path.lineTo(w * 0.65, h * 0.2); 
+          path.lineTo(w * 0.65, h * 0.45); 
+          path.lineTo(w * 0.7, h * 0.7); 
+          path.lineTo(w * 0.6, h * 0.7); 
+          path.lineTo(w * 0.55, h * 0.5); 
+          path.lineTo(w * 0.4, h * 0.55); 
+          path.lineTo(w * 0.45, h * 0.75); 
+          path.lineTo(w * 0.35, h * 0.75); 
+          path.lineTo(w * 0.3, h * 0.6); 
+          path.lineTo(end.x, end.y); 
+          return { path, start, end };
+        }
+      },
+      {
+        id: 'ai_humanoid',
+        category: 'humanoid',
+        name: 'AI新發現: 奇特人形',
+        icon: <Bot size={20} />,
+        description: '【AI與無人機新發現】新發現中有許多帶著奇特頭飾、觸角或方形頭部的人形圖案，看起來就像科幻電影裡的外星人或機器人！這可能是古代祭司戴著面具的樣貌。',
+        getShape: (w, h) => {
+          const path = new Path2D();
+          const start = { x: w * 0.3, y: h * 0.5 };
+          const end = { x: w * 0.7, y: h * 0.5 };
+          
+          path.moveTo(start.x, start.y);
+          path.lineTo(w * 0.4, h * 0.5); 
+          path.lineTo(w * 0.45, h * 0.6); 
+          path.lineTo(w * 0.4, h * 0.85); 
+          path.lineTo(w * 0.48, h * 0.85); 
+          path.lineTo(w * 0.5, h * 0.7); 
+          path.lineTo(w * 0.52, h * 0.85); 
+          path.lineTo(w * 0.6, h * 0.85);
+          path.lineTo(w * 0.55, h * 0.6); 
+          path.lineTo(w * 0.6, h * 0.5); 
+          path.lineTo(end.x, end.y); 
+          
+          // 奇特的方形頭與觸角
+          path.lineTo(w * 0.6, h * 0.5); 
+          path.lineTo(w * 0.65, h * 0.3); 
+          path.lineTo(w * 0.55, h * 0.35); 
+          path.lineTo(w * 0.5, h * 0.15); 
+          path.lineTo(w * 0.45, h * 0.35); 
+          path.lineTo(w * 0.35, h * 0.3); 
+          path.lineTo(w * 0.4, h * 0.5); 
+          
+          return { path, start, end };
+        }
+      }
+    ];
+
+    function App() {
+      // === 狀態管理 ===
+      const [mode, setMode] = useState('trace'); 
+      const [difficulty, setDifficulty] = useState(60); 
+      const [currentPatternId, setCurrentPatternId] = useState(PATTERNS[0].id);
+      const [gameState, setGameState] = useState('idle'); 
+      
+      // === 參考點 ===
+      const canvasRef = useRef(null);
+      const containerRef = useRef(null);
+      const drawingRef = useRef({
+        isDrawing: false,
+        lastX: 0,
+        lastY: 0,
+        shapeData: null 
+      });
+
+      const currentPattern = PATTERNS.find(p => p.id === currentPatternId) || PATTERNS[0];
+
+      // === 初始化與繪製背景 ===
+      const initCanvas = () => {
+        const canvas = canvasRef.current;
+        const container = containerRef.current;
+        if (!canvas || !container) return;
+
+        const dpr = window.devicePixelRatio || 1;
+        const rect = container.getBoundingClientRect();
+        
+        canvas.width = rect.width * dpr;
+        canvas.height = rect.height * dpr;
+        
+        const ctx = canvas.getContext('2d');
+        ctx.scale(dpr, dpr);
+        
+        const shapeData = currentPattern.getShape(rect.width, rect.height);
+        drawingRef.current.shapeData = shapeData;
+
+        drawBase(ctx, rect.width, rect.height, shapeData);
+      };
+
+      const drawBase = (ctx, w, h, shapeData) => {
+        ctx.clearRect(0, 0, w, h);
+        const { path, start, end } = shapeData;
+
+        if (mode === 'wire') {
+          ctx.strokeStyle = '#d4b88a'; 
+          ctx.lineWidth = difficulty;
+          ctx.lineCap = 'round';
+          ctx.lineJoin = 'round';
+          ctx.stroke(path);
+
+          ctx.strokeStyle = '#c2a172';
+          ctx.lineWidth = 2;
+          ctx.setLineDash([5, 10]);
+          ctx.stroke(path);
+          ctx.setLineDash([]); 
+        } else {
+          ctx.strokeStyle = '#8b6f4e';
+          ctx.lineWidth = 4;
+          ctx.setLineDash([15, 15]);
+          ctx.lineCap = 'round';
+          ctx.lineJoin = 'round';
+          ctx.stroke(path);
+          ctx.setLineDash([]);
+        }
+
+        const drawCircle = (x, y, color, label) => {
+          ctx.beginPath();
+          ctx.arc(x, y, 20, 0, Math.PI * 2);
+          ctx.fillStyle = color;
+          ctx.fill();
+          ctx.lineWidth = 3;
+          ctx.strokeStyle = '#fff';
+          ctx.stroke();
+
+          ctx.fillStyle = '#fff';
+          ctx.font = 'bold 14px sans-serif';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText(label, x, y);
+        };
+
+        drawCircle(start.x, start.y, '#22c55e', '起');
+        drawCircle(end.x, end.y, '#ef4444', '終');
+      };
+
+      useEffect(() => {
+        initCanvas();
+        setGameState('idle');
+      }, [mode, currentPatternId, difficulty]);
+
+      useEffect(() => {
+        window.addEventListener('resize', initCanvas);
+        return () => window.removeEventListener('resize', initCanvas);
+      }, [currentPatternId, mode]); 
+
+      const getPointerPos = (e) => {
+        const canvas = canvasRef.current;
+        const rect = canvas.getBoundingClientRect();
+        const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+        const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+        return {
+          x: clientX - rect.left,
+          y: clientY - rect.top
+        };
+      };
+
+      const checkCollision = (ctx, x, y) => {
+        const { shapeData } = drawingRef.current;
+        if (!shapeData) return false;
+
+        ctx.save();
+        ctx.lineWidth = difficulty;
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        const isSafe = ctx.isPointInStroke(shapeData.path, x, y);
+        ctx.restore();
+
+        const distToStart = Math.hypot(x - shapeData.start.x, y - shapeData.start.y);
+        const distToEnd = Math.hypot(x - shapeData.end.x, y - shapeData.end.y);
+
+        return isSafe || distToStart < 25 || distToEnd < 25;
+      };
+
+      const handlePointerDown = (e) => {
+        if (gameState === 'failed' || gameState === 'success') return;
+        
+        const { x, y } = getPointerPos(e);
+        const { shapeData } = drawingRef.current;
+        
+        const distToStart = Math.hypot(x - shapeData.start.x, y - shapeData.start.y);
+        if (distToStart < 30) {
+          setGameState('playing');
+          drawingRef.current.isDrawing = true;
+          drawingRef.current.lastX = x;
+          drawingRef.current.lastY = y;
+          initCanvas(); 
+        }
+      };
+
+      const handlePointerMove = (e) => {
+        if (!drawingRef.current.isDrawing || gameState !== 'playing') return;
+        if(e.cancelable) e.preventDefault(); 
+
+        const { x, y } = getPointerPos(e);
+        const canvas = canvasRef.current;
+        const ctx = canvas.getContext('2d');
+
+        ctx.beginPath();
+        ctx.moveTo(drawingRef.current.lastX, drawingRef.current.lastY);
+        ctx.lineTo(x, y);
+        ctx.strokeStyle = '#5a3d24'; 
+        ctx.lineWidth = mode === 'wire' ? 8 : 12;
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        ctx.stroke();
+
+        drawingRef.current.lastX = x;
+        drawingRef.current.lastY = y;
+
+        if (mode === 'wire') {
+          const isSafe = checkCollision(ctx, x, y);
+          if (!isSafe) {
+            drawingRef.current.isDrawing = false;
+            setGameState('failed');
+            return;
+          }
+        }
+
+        const { shapeData } = drawingRef.current;
+        const distToEnd = Math.hypot(x - shapeData.end.x, y - shapeData.end.y);
+        if (distToEnd < 25) {
+          drawingRef.current.isDrawing = false;
+          setGameState('success');
+        }
+      };
+
+      const handlePointerUp = () => {
+        if (drawingRef.current.isDrawing && gameState === 'playing') {
+          drawingRef.current.isDrawing = false;
+          if (mode === 'wire') {
+            setGameState('failed'); 
+          }
+        }
+      };
+
+      const handleRetry = () => {
+        setGameState('idle');
+        initCanvas();
+      };
+
+      return (
+        <div className="flex flex-col h-screen bg-[#f4e8d3] font-sans text-stone-800">
+          <header className="bg-stone-800 text-[#f4e8d3] p-4 flex flex-col md:flex-row items-center justify-between shadow-md z-10">
+            <div className="flex items-center gap-3 mb-3 md:mb-0">
+              <div className="bg-[#d4b88a] p-2 rounded-lg text-stone-900">
+                <Triangle size={24} />
+              </div>
+              <h1 className="text-xl md:text-2xl font-bold tracking-wider">納斯卡線 運筆大挑戰</h1>
+            </div>
+
+            <div className="flex bg-stone-700 p-1 rounded-xl">
+              <button
+                onClick={() => setMode('trace')}
+                className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors ${
+                  mode === 'trace' ? 'bg-[#d4b88a] text-stone-900 font-bold' : 'text-stone-300 hover:bg-stone-600'
+                }`}
+              >
+                <Pencil size={18} />
+                描繪練習
+              </button>
+              <button
+                onClick={() => setMode('wire')}
+                className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors ${
+                  mode === 'wire' ? 'bg-amber-400 text-stone-900 font-bold' : 'text-stone-300 hover:bg-stone-600'
+                }`}
+              >
+                <Zap size={18} />
+                電流急急棒
+              </button>
+            </div>
+          </header>
+
+          <div className="flex flex-1 flex-col md:flex-row overflow-hidden">
+            <aside className="w-full md:w-80 bg-[#ebdcb7] border-r border-[#d4b88a] flex flex-col overflow-y-auto">
+              <div className="p-5 border-b border-[#d4b88a]">
+                <h2 className="font-bold text-lg mb-3 flex items-center gap-2">
+                  <Play size={18} />
+                  選擇挑戰圖形
+                </h2>
+                <div className="grid grid-cols-1 gap-2">
+                  {PATTERNS.map((pattern) => (
+                    <button
+                      key={pattern.id}
+                      onClick={() => setCurrentPatternId(pattern.id)}
+                      className={`flex items-center gap-3 p-3 rounded-xl border-2 transition-all ${
+                        currentPatternId === pattern.id 
+                        ? 'border-stone-800 bg-[#d4b88a] font-bold shadow-sm' 
+                        : 'border-transparent bg-[#f4e8d3] hover:border-[#d4b88a]'
+                      }`}
+                    >
+                      {pattern.icon}
+                      {pattern.name}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {mode === 'wire' && (
+                <div className="p-5 border-b border-[#d4b88a] bg-amber-100/50">
+                  <h2 className="font-bold text-lg mb-3">挑戰難度 (軌道寬度)</h2>
+                  <div className="flex gap-2">
+                    <button onClick={() => setDifficulty(90)} className={`flex-1 py-2 rounded-lg border-2 ${difficulty === 90 ? 'border-amber-600 bg-amber-200 font-bold' : 'border-amber-200 bg-white'}`}>簡單</button>
+                    <button onClick={() => setDifficulty(60)} className={`flex-1 py-2 rounded-lg border-2 ${difficulty === 60 ? 'border-amber-600 bg-amber-200 font-bold' : 'border-amber-200 bg-white'}`}>適中</button>
+                    <button onClick={() => setDifficulty(30)} className={`flex-1 py-2 rounded-lg border-2 ${difficulty === 30 ? 'border-amber-600 bg-amber-200 font-bold' : 'border-amber-200 bg-white'}`}>困難</button>
+                  </div>
+                </div>
+              )}
+
+              <div className="p-5 flex-1">
+                <h2 className="font-bold text-lg mb-3 flex items-center gap-2 text-stone-700">
+                  <Info size={18} />
+                  歷史小知識
+                </h2>
+                <div className="bg-white/60 p-4 rounded-xl leading-relaxed text-sm text-stone-700 shadow-inner">
+                  <span className="font-bold block mb-2 text-stone-900">{currentPattern.name}</span>
+                  {currentPattern.description}
+                </div>
+              </div>
+            </aside>
+
+            <main className="flex-1 relative flex flex-col">
+              <div className="absolute top-4 left-0 right-0 flex justify-center pointer-events-none z-10">
+                <div className="bg-white/80 backdrop-blur-sm px-6 py-2 rounded-full shadow-md text-stone-700 font-medium flex items-center gap-2">
+                  <Hand size={18} className="text-amber-600" />
+                  {mode === 'trace' 
+                    ? '請從【起】點開始，按住並沿著虛線畫到【終】點' 
+                    : '請從【起】點一筆畫到【終】點，千萬不能超出軌道喔！'}
+                </div>
+              </div>
+
+              <div 
+                ref={containerRef} 
+                className="flex-1 m-4 md:m-8 bg-[#e4ccaa] rounded-2xl shadow-inner relative overflow-hidden border-4 border-[#d4b88a] cursor-crosshair"
+                style={{ touchAction: 'none' }}
+                onPointerDown={handlePointerDown}
+                onPointerMove={handlePointerMove}
+                onPointerUp={handlePointerUp}
+                onPointerLeave={handlePointerUp}
+              >
+                <canvas ref={canvasRef} className="absolute inset-0 w-full h-full" />
+                
+                {gameState === 'failed' && (
+                  <div className="absolute inset-0 bg-red-500/20 backdrop-blur-[2px] flex items-center justify-center flex-col z-20">
+                    <div className="bg-white p-8 rounded-3xl shadow-2xl flex flex-col items-center">
+                      <AlertTriangle size={64} className="text-red-500 mb-4" />
+                      <h2 className="text-2xl font-bold text-stone-800 mb-2">哎呀！碰到邊緣了 / 筆拿起來了</h2>
+                      <p className="text-stone-500 mb-6">納斯卡線需要專注，再試一次吧！</p>
+                      <button 
+                        onClick={handleRetry}
+                        className="flex items-center gap-2 bg-stone-800 text-white px-8 py-3 rounded-full font-bold text-lg hover:bg-stone-700 transition-colors shadow-lg"
+                      >
+                        <RefreshCw size={20} />
+                        重新挑戰
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {gameState === 'success' && (
+                  <div className="absolute inset-0 bg-green-500/20 backdrop-blur-[2px] flex items-center justify-center flex-col z-20">
+                    <div className="bg-white p-8 rounded-3xl shadow-2xl flex flex-col items-center">
+                      <Trophy size={64} className="text-amber-500 mb-4" />
+                      <h2 className="text-2xl font-bold text-stone-800 mb-2">恭喜完成！</h2>
+                      <p className="text-stone-500 mb-6">你的運筆技巧非常出色，像古代工匠一樣！</p>
+                      <button 
+                        onClick={handleRetry}
+                        className="flex items-center gap-2 bg-amber-500 text-stone-900 px-8 py-3 rounded-full font-bold text-lg hover:bg-amber-400 transition-colors shadow-lg"
+                      >
+                        <RefreshCw size={20} />
+                        再玩一次
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </main>
+          </div>
+        </div>
+      );
+    }
+
+    const root = createRoot(document.getElementById('root'));
+    root.render(<App />);
+  </script>
+</body>
+</html>
