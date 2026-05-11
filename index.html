@@ -30,6 +30,15 @@
       user-select: none;
     }
     
+    /* 隱藏橫向捲軸 */
+    .hide-scrollbar::-webkit-scrollbar {
+      display: none;
+    }
+    .hide-scrollbar {
+      -ms-overflow-style: none;
+      scrollbar-width: none;
+    }
+    
     /* 震動特效 */
     @keyframes shake {
       0%, 100% { transform: translateX(0); }
@@ -54,7 +63,7 @@
       Pencil, Zap, RefreshCw, Trophy, AlertTriangle, 
       Info, Triangle, Bug, Bird, Play, Hand,
       Dog, User, Fish, Trees, Aperture,
-      Cat, Bot, PawPrint
+      Cat, Bot, PawPrint, CheckCircle2
     } from 'lucide-react';
 
     // === Web Audio API: 合成真實感爆炸音效 ===
@@ -448,6 +457,16 @@
       const [currentPatternId, setCurrentPatternId] = useState(PATTERNS[0].id);
       const [gameState, setGameState] = useState('idle'); 
       
+      // === 進度紀錄 (使用 localStorage 自動存檔) ===
+      const [completedPatterns, setCompletedPatterns] = useState(() => {
+        try {
+          const saved = localStorage.getItem('nazcaCompletedPatterns');
+          return saved ? JSON.parse(saved) : [];
+        } catch (e) {
+          return [];
+        }
+      });
+      
       // === 參考點 ===
       const canvasRef = useRef(null);
       const containerRef = useRef(null);
@@ -629,6 +648,16 @@
         if (distToEnd < 25) {
           drawingRef.current.isDrawing = false;
           setGameState('success');
+          
+          // 記錄過關進度並自動存檔
+          setCompletedPatterns(prev => {
+            if (prev.includes(currentPatternId)) return prev;
+            const newCompleted = [...prev, currentPatternId];
+            try {
+              localStorage.setItem('nazcaCompletedPatterns', JSON.stringify(newCompleted));
+            } catch(e) {}
+            return newCompleted;
+          });
         }
       };
 
@@ -680,6 +709,39 @@
             </div>
           </header>
 
+          {/* === 最上方進度列 (Progress Bar) === */}
+          <div className="bg-stone-900 px-4 py-3 flex items-center gap-3 border-b-2 border-stone-950 shadow-inner overflow-x-auto hide-scrollbar">
+            <div className="flex items-center gap-2 text-stone-400 font-bold text-sm whitespace-nowrap border-r border-stone-700 pr-4 shrink-0">
+              <Trophy size={18} className={completedPatterns.length === PATTERNS.length ? "text-amber-400" : ""} />
+              <span>收集進度 {completedPatterns.length} / {PATTERNS.length}</span>
+            </div>
+            
+            <div className="flex gap-2 shrink-0">
+              {PATTERNS.map((pattern) => {
+                const isCompleted = completedPatterns.includes(pattern.id);
+                const isCurrent = currentPatternId === pattern.id;
+                return (
+                  <button
+                    key={`top-${pattern.id}`}
+                    onClick={() => setCurrentPatternId(pattern.id)}
+                    className={`relative flex items-center justify-center p-2 rounded-xl transition-all duration-300 min-w-[50px] h-[50px] ${
+                      isCompleted 
+                        ? 'bg-amber-500/20 text-amber-400 border border-amber-500/50 shadow-[0_0_10px_rgba(245,158,11,0.2)]' 
+                        : 'bg-stone-800 text-stone-600 border border-transparent hover:bg-stone-700 hover:text-stone-400'
+                    } ${isCurrent && !isCompleted ? 'ring-2 ring-stone-400 ring-offset-1 ring-offset-stone-900' : ''} 
+                      ${isCurrent && isCompleted ? 'ring-2 ring-amber-400 ring-offset-1 ring-offset-stone-900' : ''}`}
+                    title={pattern.name}
+                  >
+                    {pattern.icon}
+                    {isCompleted && (
+                      <CheckCircle2 size={16} className="absolute -bottom-1 -right-1 text-green-500 bg-stone-900 rounded-full" />
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
           <div className="flex flex-1 flex-col md:flex-row overflow-hidden">
             <aside className="w-full md:w-80 bg-[#ebdcb7] border-r border-[#d4b88a] flex flex-col overflow-y-auto">
               <div className="p-5 border-b border-[#d4b88a]">
@@ -698,8 +760,13 @@
                         : 'border-transparent bg-[#f4e8d3] hover:border-[#d4b88a]'
                       }`}
                     >
-                      {pattern.icon}
-                      {pattern.name}
+                      <div className={completedPatterns.includes(pattern.id) ? "text-amber-600" : "text-stone-600"}>
+                        {pattern.icon}
+                      </div>
+                      <span className="flex-1 text-left">{pattern.name}</span>
+                      {completedPatterns.includes(pattern.id) && (
+                        <CheckCircle2 size={20} className="text-green-600 drop-shadow-sm" />
+                      )}
                     </button>
                   ))}
                 </div>
