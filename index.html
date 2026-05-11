@@ -29,6 +29,18 @@
       -webkit-touch-callout: none;
       user-select: none;
     }
+    
+    /* 震動特效 */
+    @keyframes shake {
+      0%, 100% { transform: translateX(0); }
+      20% { transform: translateX(-10px) rotate(-2deg); }
+      40% { transform: translateX(10px) rotate(2deg); }
+      60% { transform: translateX(-10px) rotate(-2deg); }
+      80% { transform: translateX(10px) rotate(2deg); }
+    }
+    .animate-shake {
+      animation: shake 0.4s cubic-bezier(.36,.07,.19,.97) both;
+    }
   </style>
 </head>
 <body>
@@ -44,6 +56,62 @@
       Dog, User, Fish, Trees, Aperture,
       Cat, Bot, PawPrint
     } from 'lucide-react';
+
+    // === Web Audio API: 合成真實感爆炸音效 ===
+    const playExplosionSound = () => {
+      try {
+        const AudioContext = window.AudioContext || window.webkitAudioContext;
+        if (!AudioContext) return;
+        const ctx = new AudioContext();
+
+        // 1. 白噪音層 (模擬爆炸的沙沙聲與破壞感)
+        const bufferSize = ctx.sampleRate * 2;
+        const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+        const data = buffer.getChannelData(0);
+        for (let i = 0; i < bufferSize; i++) {
+          data[i] = Math.random() * 2 - 1;
+        }
+        const noise = ctx.createBufferSource();
+        noise.buffer = buffer;
+
+        // 白噪音的濾波器 (低通濾波讓聲音沉悶)
+        const noiseFilter = ctx.createBiquadFilter();
+        noiseFilter.type = 'lowpass';
+        noiseFilter.frequency.setValueAtTime(800, ctx.currentTime);
+        noiseFilter.frequency.exponentialRampToValueAtTime(100, ctx.currentTime + 0.5);
+
+        // 白噪音的音量控制 (快速衰減)
+        const gainNode = ctx.createGain();
+        gainNode.gain.setValueAtTime(1, ctx.currentTime);
+        gainNode.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.6);
+
+        noise.connect(noiseFilter);
+        noiseFilter.connect(gainNode);
+        gainNode.connect(ctx.destination);
+
+        // 2. 低頻震盪層 (模擬爆炸的低音 Punch)
+        const osc = ctx.createOscillator();
+        osc.type = 'square';
+        osc.frequency.setValueAtTime(150, ctx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(20, ctx.currentTime + 0.5);
+
+        const oscGain = ctx.createGain();
+        oscGain.gain.setValueAtTime(1, ctx.currentTime);
+        oscGain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.5);
+
+        osc.connect(oscGain);
+        oscGain.connect(ctx.destination);
+        
+        // 播放兩個聲音層
+        noise.start();
+        osc.start();
+        noise.stop(ctx.currentTime + 0.7);
+        osc.stop(ctx.currentTime + 0.7);
+
+      } catch (e) {
+        console.error("瀏覽器不支援音效", e);
+      }
+    };
 
     // === 納斯卡線圖案資料庫 ===
     const PATTERNS = [
@@ -484,17 +552,28 @@
         const { shapeData } = drawingRef.current;
         if (!shapeData) return false;
 
+        const dpr = window.devicePixelRatio || 1;
+
         ctx.save();
         ctx.lineWidth = difficulty;
         ctx.lineCap = 'round';
         ctx.lineJoin = 'round';
-        const isSafe = ctx.isPointInStroke(shapeData.path, x, y);
+        
+        // 【修正重點】 isPointInStroke 需要真實設備座標 (需乘上 dpr)
+        const isSafe = ctx.isPointInStroke(shapeData.path, x * dpr, y * dpr);
         ctx.restore();
 
         const distToStart = Math.hypot(x - shapeData.start.x, y - shapeData.start.y);
         const distToEnd = Math.hypot(x - shapeData.end.x, y - shapeData.end.y);
 
-        return isSafe || distToStart < 25 || distToEnd < 25;
+        // 放寬起點與終點周圍的安全容錯率，避免剛點擊就死掉
+        return isSafe || distToStart < 35 || distToEnd < 35;
+      };
+
+      const triggerFailure = () => {
+        drawingRef.current.isDrawing = false;
+        setGameState('failed');
+        playExplosionSound(); // 播放爆炸音效
       };
 
       const handlePointerDown = (e) => {
@@ -504,12 +583,14 @@
         const { shapeData } = drawingRef.current;
         
         const distToStart = Math.hypot(x - shapeData.start.x, y - shapeData.start.y);
-        if (distToStart < 30) {
+        
+        // 點擊在起點範圍內，開始遊戲
+        if (distToStart < 35) {
           setGameState('playing');
           drawingRef.current.isDrawing = true;
           drawingRef.current.lastX = x;
           drawingRef.current.lastY = y;
-          initCanvas(); 
+          initCanvas(); // 清空舊畫跡
         }
       };
 
@@ -521,6 +602,7 @@
         const canvas = canvasRef.current;
         const ctx = canvas.getContext('2d');
 
+        // 繪製軌跡
         ctx.beginPath();
         ctx.moveTo(drawingRef.current.lastX, drawingRef.current.lastY);
         ctx.lineTo(x, y);
@@ -533,11 +615,11 @@
         drawingRef.current.lastX = x;
         drawingRef.current.lastY = y;
 
+        // 檢查碰撞
         if (mode === 'wire') {
           const isSafe = checkCollision(ctx, x, y);
           if (!isSafe) {
-            drawingRef.current.isDrawing = false;
-            setGameState('failed');
+            triggerFailure();
             return;
           }
         }
@@ -552,9 +634,11 @@
 
       const handlePointerUp = () => {
         if (drawingRef.current.isDrawing && gameState === 'playing') {
-          drawingRef.current.isDrawing = false;
           if (mode === 'wire') {
-            setGameState('failed'); 
+            // 急急棒模式中途提筆算失敗
+            triggerFailure();
+          } else {
+            drawingRef.current.isDrawing = false;
           }
         }
       };
@@ -656,7 +740,7 @@
 
               <div 
                 ref={containerRef} 
-                className="flex-1 m-4 md:m-8 bg-[#e4ccaa] rounded-2xl shadow-inner relative overflow-hidden border-4 border-[#d4b88a] cursor-crosshair"
+                className={`flex-1 m-4 md:m-8 bg-[#e4ccaa] rounded-2xl shadow-inner relative overflow-hidden border-4 border-[#d4b88a] cursor-crosshair ${gameState === 'failed' ? 'animate-shake border-red-500' : ''}`}
                 style={{ touchAction: 'none' }}
                 onPointerDown={handlePointerDown}
                 onPointerMove={handlePointerMove}
@@ -666,10 +750,10 @@
                 <canvas ref={canvasRef} className="absolute inset-0 w-full h-full" />
                 
                 {gameState === 'failed' && (
-                  <div className="absolute inset-0 bg-red-500/20 backdrop-blur-[2px] flex items-center justify-center flex-col z-20">
+                  <div className="absolute inset-0 bg-red-600/40 backdrop-blur-[2px] flex items-center justify-center flex-col z-20">
                     <div className="bg-white p-8 rounded-3xl shadow-2xl flex flex-col items-center">
-                      <AlertTriangle size={64} className="text-red-500 mb-4" />
-                      <h2 className="text-2xl font-bold text-stone-800 mb-2">哎呀！碰到邊緣了 / 筆拿起來了</h2>
+                      <AlertTriangle size={64} className="text-red-600 mb-4 animate-pulse" />
+                      <h2 className="text-2xl font-bold text-stone-800 mb-2">碰！碰到邊緣了 / 筆拿起來了</h2>
                       <p className="text-stone-500 mb-6">納斯卡線需要專注，再試一次吧！</p>
                       <button 
                         onClick={handleRetry}
